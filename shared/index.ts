@@ -9,3 +9,15 @@ export interface Player {
 export interface GameState {
   players: { [id: string]: Player };
 }
+
+export interface PlayerData {
+  id: string;
+  x: number;
+  y: number;
+}
+
+export interface PlayerMovedData {
+  id: string;
+  x: number;
+  y: number;
+}
