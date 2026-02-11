@@ -10,7 +10,8 @@ app.use(cors());
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: "http://localhost:5173",
+    // IMPORTANT: Allow your local IP or just use "*" for testing
+    origin: "*",
     methods: ["GET", "POST"],
   },
 });
@@ -53,6 +54,6 @@ io.on("connection", (socket) => {
 });
 
 const PORT = 3000;
-httpServer.listen(PORT, () => {
-  console.log(`🚀 Game Server running on http://localhost:${PORT}`);
+httpServer.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 Game Server reachable at http://172.20.20.116:${PORT}`);
 });
