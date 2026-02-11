@@ -7,7 +7,9 @@ export const startGame = (socket: Socket) => {
     type: Phaser.AUTO,
     parent: "game-container",
     backgroundColor: "#1a1a1a",
-    pixelArt: true,
+    pixelArt: false,
+    roundPixels: true,
+
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
@@ -17,8 +19,9 @@ export const startGame = (socket: Socket) => {
     physics: {
       default: "arcade",
       arcade: {
+        // Fix: Explicitly define both x and y to satisfy the Vector2Like interface
         gravity: { x: 0, y: 0 },
-        debug: true,
+        debug: false,
       },
     },
     scene: [new MainScene(socket)],

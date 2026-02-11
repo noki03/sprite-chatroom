@@ -14,14 +14,16 @@ export class ChatBubbleManager {
 
     const bubble = this.scene.add
       .text(target.x, target.y - 50, text, {
-        fontSize: "14px",
+        fontFamily: "Arial, sans-serif", // Use a cleaner font
+        fontSize: "28px", // Double the size
         color: "#000",
         backgroundColor: "#fff",
-        padding: { x: 8, y: 4 },
-        wordWrap: { width: 160 },
+        padding: { x: 12, y: 8 },
+        wordWrap: { width: 300 }, // Adjust wrap for larger font
         align: "center",
       })
       .setOrigin(0.5, 1)
+      .setScale(0.5) // Scale it back down to 14px size for ultra-sharpness
       .setDepth(4000);
 
     this.bubbles.set(id, bubble);
