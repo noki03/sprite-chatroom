@@ -1,18 +1,25 @@
 import Phaser from "phaser";
 import { Socket } from "socket.io-client";
-import { LocalPlayer } from "../entities/LocalPlayer";
-import { RemotePlayer } from "../entities/RemotePlayer";
+import { PlayerManager } from "../handlers/PlayerManager";
+import { ChatBubbleManager } from "../handlers/ChatBubbleManager";
 
 export class MainScene extends Phaser.Scene {
   private socket: Socket;
-  private localPlayer!: LocalPlayer;
-  private otherPlayers: Map<string, RemotePlayer> = new Map();
+  private players: PlayerManager;
+  private bubbles: ChatBubbleManager;
+
+  // Store controls as properties so update() can use them without re-declaring
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd!: any;
+
+  private lastSentX = 0;
+  private lastSentY = 0;
 
   constructor(socket: Socket) {
     super("MainScene");
     this.socket = socket;
+    this.players = new PlayerManager(this);
+    this.bubbles = new ChatBubbleManager(this);
   }
 
   preload() {
@@ -30,88 +37,66 @@ export class MainScene extends Phaser.Scene {
   }
 
   create() {
+    // Initialize controls ONCE
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.wasd = this.input.keyboard!.addKeys("W,A,S,D");
 
-    // ⭐ Allow HTML inputs to receive keys (CHAT FIX)
-    this.input.keyboard!.removeCapture("SPACE");
-    this.input.keyboard!.removeCapture("W,A,S,D");
+    this.input.keyboard!.removeCapture("SPACE,W,A,S,D");
+    this.players.spawnLocal(0, 0);
 
-    this.localPlayer = new LocalPlayer(this, 0, 0);
-
-    // Networking
-    this.socket.on("currentPlayers", (players: any) => {
-      Object.keys(players).forEach((id) => {
+    // --- Network Events ---
+    this.socket.on("currentPlayers", (data) => {
+      Object.keys(data).forEach((id) => {
         if (id === this.socket.id) {
-          this.localPlayer.sprite.setPosition(players[id].x, players[id].y);
+          this.players.localPlayer.sprite.setPosition(data[id].x, data[id].y);
         } else {
-          this.spawnRemotePlayer(id, players[id].x, players[id].y);
+          this.players.spawnRemote(id, data[id].x, data[id].y);
         }
       });
     });
 
-    this.socket.on("newPlayer", (data: any) =>
-      this.spawnRemotePlayer(data.id, data.x, data.y),
+    this.socket.on("newPlayer", (data) =>
+      this.players.spawnRemote(data.id, data.x, data.y),
     );
 
-    this.socket.on("playerMoved", (data: any) => {
-      const p = this.otherPlayers.get(data.id);
+    this.socket.on("playerMoved", (data) => {
+      const p = this.players.remotePlayers.get(data.id);
       if (p) {
         p.setPosition(data.x, data.y);
         p.setDepth(data.y);
       }
     });
 
-    this.socket.on("playerDisconnected", (id: string) => {
-      this.otherPlayers.get(id)?.destroy();
-      this.otherPlayers.delete(id);
+    this.socket.on("playerDisconnected", (id) => {
+      this.players.removePlayer(id);
+      this.bubbles.removeBubble(id);
     });
 
-    this.socket.on("newMessage", (data: any) =>
-      this.showBubble(data.id, data.text),
-    );
-  }
-
-  private spawnRemotePlayer(id: string, x: number, y: number) {
-    if (this.otherPlayers.has(id)) return;
-    this.otherPlayers.set(id, new RemotePlayer(this, id, x, y));
-  }
-
-  private showBubble(id: string, text: string) {
-    const target =
-      id === this.socket.id
-        ? this.localPlayer.sprite
-        : this.otherPlayers.get(id);
-    if (!target) return;
-
-    const bubble = this.add
-      .text(target.x, target.y - 45, text, {
-        fontSize: "14px",
-        color: "#000",
-        backgroundColor: "#fff",
-        padding: { x: 8, y: 4 },
-        wordWrap: { width: 160 },
-      })
-      .setOrigin(0.5, 1)
-      .setDepth(3000);
-
-    this.tweens.add({
-      targets: bubble,
-      y: target.y - 80,
-      alpha: 0,
-      duration: 4000,
-      onComplete: () => bubble.destroy(),
+    this.socket.on("newMessage", (data) => {
+      if (data.id === "SYSTEM") return;
+      const target = this.players.getPlayer(data.id, this.socket.id!);
+      if (target) this.bubbles.showBubble(data.id, target, data.text);
     });
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.socket.off());
   }
 
   update() {
-    this.localPlayer.update(this.cursors, this.wasd);
+    const { localPlayer } = this.players;
 
-    const x = Math.round(this.localPlayer.sprite.x);
-    const y = Math.round(this.localPlayer.sprite.y);
-    if (x !== (this as any).lastSentX || y !== (this as any).lastSentY) {
-      (this as any).lastSentX = x;
-      (this as any).lastSentY = y;
+    // Use the class properties instead of declaring new variables
+    localPlayer.update(this.cursors, this.wasd);
+
+    // Sync Bubbles
+    this.bubbles.update((id) => this.players.getPlayer(id, this.socket.id!));
+
+    // Network Sync
+    const x = Math.round(localPlayer.sprite.x);
+    const y = Math.round(localPlayer.sprite.y);
+
+    if (x !== this.lastSentX || y !== this.lastSentY) {
+      this.lastSentX = x;
+      this.lastSentY = y;
       this.socket.emit("playerMove", { x, y });
     }
   }
