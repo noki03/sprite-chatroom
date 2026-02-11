@@ -1,98 +1,111 @@
 import Phaser from "phaser";
 import { Socket } from "socket.io-client";
+import { LocalPlayer } from "../entities/LocalPlayer";
+import { RemotePlayer } from "../entities/RemotePlayer";
 
 export class MainScene extends Phaser.Scene {
   private socket: Socket;
-
-  private playerBody!: Phaser.Physics.Arcade.Body;
-  private playerRect!: Phaser.GameObjects.Rectangle;
-  private otherPlayers: Map<string, Phaser.GameObjects.Rectangle> = new Map();
-
+  private localPlayer!: LocalPlayer;
+  private otherPlayers: Map<string, RemotePlayer> = new Map();
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private wasd!: Record<string, Phaser.Input.Keyboard.Key>;
-
-  private lastSentX = 0;
-  private lastSentY = 0;
+  private wasd!: any;
 
   constructor(socket: Socket) {
     super("MainScene");
     this.socket = socket;
   }
 
+  preload() {
+    const graphics = this.make.graphics({ x: 0, y: 0 });
+    graphics
+      .fillStyle(0x00ff00)
+      .fillRect(0, 0, 32, 32)
+      .generateTexture("player-tex", 32, 32);
+    graphics
+      .clear()
+      .fillStyle(0xff0000)
+      .fillRect(0, 0, 32, 32)
+      .generateTexture("other-tex", 32, 32);
+    graphics.destroy();
+  }
+
   create() {
     this.cursors = this.input.keyboard!.createCursorKeys();
-    this.wasd = this.input.keyboard!.addKeys("W,A,S,D") as any;
+    this.wasd = this.input.keyboard!.addKeys("W,A,S,D");
 
-    this.playerRect = this.add.rectangle(0, 0, 32, 32, 0x00ff00);
-    this.physics.add.existing(this.playerRect);
-    this.playerBody = this.playerRect.body as Phaser.Physics.Arcade.Body;
-    this.playerBody.setCollideWorldBounds(true);
+    this.localPlayer = new LocalPlayer(this, 0, 0);
 
-    // --- SOCKET EVENTS ---
-
+    // Networking
     this.socket.on("currentPlayers", (players: any) => {
-      if (!this.sys.isActive()) return;
-
       Object.keys(players).forEach((id) => {
         if (id === this.socket.id) {
-          this.playerRect.setPosition(players[id].x, players[id].y);
+          this.localPlayer.sprite.setPosition(players[id].x, players[id].y);
         } else {
-          this.addOtherPlayer(id, players[id].x, players[id].y);
+          this.spawnRemotePlayer(id, players[id].x, players[id].y);
         }
       });
     });
 
-    this.socket.on("newPlayer", (data: any) => {
-      if (!this.sys.isActive()) return;
-      this.addOtherPlayer(data.id, data.x, data.y);
-    });
-
+    this.socket.on("newPlayer", (data: any) =>
+      this.spawnRemotePlayer(data.id, data.x, data.y),
+    );
     this.socket.on("playerMoved", (data: any) => {
-      const other = this.otherPlayers.get(data.id);
-      if (other) other.setPosition(data.x, data.y);
-    });
-
-    this.socket.on("playerDisconnected", (id: string) => {
-      const other = this.otherPlayers.get(id);
-      if (other) {
-        other.destroy();
-        this.otherPlayers.delete(id);
+      const p = this.otherPlayers.get(data.id);
+      if (p) {
+        p.setPosition(data.x, data.y);
+        p.setDepth(data.y);
       }
     });
+    this.socket.on("playerDisconnected", (id: string) => {
+      this.otherPlayers.get(id)?.destroy();
+      this.otherPlayers.delete(id);
+    });
+
+    this.socket.on("newMessage", (data: any) =>
+      this.showBubble(data.id, data.text),
+    );
   }
 
-  private addOtherPlayer(id: string, x: number, y: number) {
-    if (!this.sys.isActive() || this.otherPlayers.has(id)) return;
+  private spawnRemotePlayer(id: string, x: number, y: number) {
+    if (this.otherPlayers.has(id)) return;
+    this.otherPlayers.set(id, new RemotePlayer(this, id, x, y));
+  }
 
-    const other = this.add.rectangle(x, y, 32, 32, 0xff0000);
-    this.otherPlayers.set(id, other);
+  private showBubble(id: string, text: string) {
+    const target =
+      id === this.socket.id
+        ? this.localPlayer.sprite
+        : this.otherPlayers.get(id);
+    if (!target) return;
+
+    const bubble = this.add
+      .text(target.x, target.y - 45, text, {
+        fontSize: "14px",
+        color: "#000",
+        backgroundColor: "#fff",
+        padding: { x: 8, y: 4 },
+        wordWrap: { width: 160 },
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(3000);
+
+    this.tweens.add({
+      targets: bubble,
+      y: target.y - 80,
+      alpha: 0,
+      duration: 4000,
+      onComplete: () => bubble.destroy(),
+    });
   }
 
   update() {
-    if (!this.playerBody) return;
+    this.localPlayer.update(this.cursors, this.wasd);
 
-    const speed = 200;
-    let vx = 0;
-    let vy = 0;
-
-    if (this.cursors.left.isDown || this.wasd.A.isDown) vx -= 1;
-    if (this.cursors.right.isDown || this.wasd.D.isDown) vx += 1;
-    if (this.cursors.up.isDown || this.wasd.W.isDown) vy -= 1;
-    if (this.cursors.down.isDown || this.wasd.S.isDown) vy += 1;
-
-    if (vx !== 0 && vy !== 0) {
-      vx *= Math.SQRT1_2;
-      vy *= Math.SQRT1_2;
-    }
-
-    this.playerBody.setVelocity(vx * speed, vy * speed);
-
-    const x = Math.round(this.playerRect.x);
-    const y = Math.round(this.playerRect.y);
-
-    if (x !== this.lastSentX || y !== this.lastSentY) {
-      this.lastSentX = x;
-      this.lastSentY = y;
+    const x = Math.round(this.localPlayer.sprite.x);
+    const y = Math.round(this.localPlayer.sprite.y);
+    if (x !== (this as any).lastSentX || y !== (this as any).lastSentY) {
+      (this as any).lastSentX = x;
+      (this as any).lastSentY = y;
       this.socket.emit("playerMove", { x, y });
     }
   }

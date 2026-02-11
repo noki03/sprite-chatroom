@@ -1,0 +1,54 @@
+import Phaser from "phaser";
+
+export class LocalPlayer {
+  public sprite: Phaser.GameObjects.Sprite;
+  public nameTag: Phaser.GameObjects.Text;
+  private scene: Phaser.Scene;
+  private body: Phaser.Physics.Arcade.Body;
+
+  constructor(scene: Phaser.Scene, x: number, y: number) {
+    this.scene = scene;
+    this.sprite = scene.add.sprite(x, y, "player-tex");
+    scene.physics.add.existing(this.sprite);
+    this.body = this.sprite.body as Phaser.Physics.Arcade.Body;
+    this.body.setCollideWorldBounds(true);
+
+    this.nameTag = scene.add
+      .text(x, y, "You", {
+        fontSize: "12px",
+        backgroundColor: "#00000066",
+        padding: { x: 4, y: 2 },
+      })
+      .setOrigin(0.5, 1.5);
+  }
+
+  update(cursors: any, wasd: any) {
+    const isTyping = document.activeElement?.tagName === "INPUT";
+    this.scene.input.keyboard!.enabled = !isTyping;
+
+    if (isTyping) {
+      this.body.setVelocity(0, 0);
+      return;
+    }
+
+    const speed = 200;
+    let vx = 0,
+      vy = 0;
+
+    if (cursors.left.isDown || wasd.A.isDown) vx -= 1;
+    if (cursors.right.isDown || wasd.D.isDown) vx += 1;
+    if (cursors.up.isDown || wasd.W.isDown) vy -= 1;
+    if (cursors.down.isDown || wasd.S.isDown) vy += 1;
+
+    if (vx !== 0 && vy !== 0) {
+      vx *= Math.SQRT1_2;
+      vy *= Math.SQRT1_2;
+    }
+
+    this.body.setVelocity(vx * speed, vy * speed);
+    this.nameTag.setPosition(this.sprite.x, this.sprite.y);
+
+    this.sprite.setDepth(this.sprite.y);
+    this.nameTag.setDepth(this.sprite.y + 1);
+  }
+}
