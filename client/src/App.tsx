@@ -72,7 +72,7 @@ function App() {
           Sprite Chatroom
         </h1>
         <div className="text-[10px] opacity-50 uppercase tracking-widest">
-          Status: {isConnected ? "🟢 Online" : "🔴 Offline"} | IP: 172.20.20.116
+          Status: {isConnected ? "🟢 Online" : "🔴 Offline"}
         </div>
       </div>
 

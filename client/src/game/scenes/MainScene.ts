@@ -33,6 +33,10 @@ export class MainScene extends Phaser.Scene {
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.wasd = this.input.keyboard!.addKeys("W,A,S,D");
 
+    // ⭐ Allow HTML inputs to receive keys (CHAT FIX)
+    this.input.keyboard!.removeCapture("SPACE");
+    this.input.keyboard!.removeCapture("W,A,S,D");
+
     this.localPlayer = new LocalPlayer(this, 0, 0);
 
     // Networking
@@ -49,6 +53,7 @@ export class MainScene extends Phaser.Scene {
     this.socket.on("newPlayer", (data: any) =>
       this.spawnRemotePlayer(data.id, data.x, data.y),
     );
+
     this.socket.on("playerMoved", (data: any) => {
       const p = this.otherPlayers.get(data.id);
       if (p) {
@@ -56,6 +61,7 @@ export class MainScene extends Phaser.Scene {
         p.setDepth(data.y);
       }
     });
+
     this.socket.on("playerDisconnected", (id: string) => {
       this.otherPlayers.get(id)?.destroy();
       this.otherPlayers.delete(id);
