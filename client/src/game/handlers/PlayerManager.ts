@@ -27,7 +27,7 @@ export class PlayerManager {
   }
 
   getPlayer(id: string, socketId: string) {
-    if (id === socketId) return this.localPlayer.sprite;
+    if (id === socketId) return this.localPlayer;
     return this.remotePlayers.get(id);
   }
 }

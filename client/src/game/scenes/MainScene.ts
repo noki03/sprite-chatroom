@@ -8,7 +8,6 @@ export class MainScene extends Phaser.Scene {
   private players: PlayerManager;
   private bubbles: ChatBubbleManager;
 
-  // Store controls as properties so update() can use them without re-declaring
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd!: any;
 
@@ -24,31 +23,30 @@ export class MainScene extends Phaser.Scene {
 
   preload() {
     const graphics = this.make.graphics({ x: 0, y: 0 });
-    graphics
-      .fillStyle(0x00ff00)
-      .fillRect(0, 0, 32, 32)
+
+    graphics.fillStyle(0x00ff00).fillRect(0, 0, 32, 32)
       .generateTexture("player-tex", 32, 32);
-    graphics
-      .clear()
-      .fillStyle(0xff0000)
-      .fillRect(0, 0, 32, 32)
+
+    graphics.clear().fillStyle(0xff0000).fillRect(0, 0, 32, 32)
       .generateTexture("other-tex", 32, 32);
+
     graphics.destroy();
   }
 
   create() {
-    // Initialize controls ONCE
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.wasd = this.input.keyboard!.addKeys("W,A,S,D");
 
     this.input.keyboard!.removeCapture("SPACE,W,A,S,D");
+
     this.players.spawnLocal(0, 0);
 
     // --- Network Events ---
+
     this.socket.on("currentPlayers", (data) => {
       Object.keys(data).forEach((id) => {
         if (id === this.socket.id) {
-          this.players.localPlayer.sprite.setPosition(data[id].x, data[id].y);
+          this.players.localPlayer.setPosition(data[id].x, data[id].y);
         } else {
           this.players.spawnRemote(id, data[id].x, data[id].y);
         }
@@ -84,15 +82,12 @@ export class MainScene extends Phaser.Scene {
   update() {
     const { localPlayer } = this.players;
 
-    // Use the class properties instead of declaring new variables
     localPlayer.update(this.cursors, this.wasd);
 
-    // Sync Bubbles
     this.bubbles.update((id) => this.players.getPlayer(id, this.socket.id!));
 
-    // Network Sync
-    const x = Math.round(localPlayer.sprite.x);
-    const y = Math.round(localPlayer.sprite.y);
+    const x = Math.round(localPlayer.x);
+    const y = Math.round(localPlayer.y);
 
     if (x !== this.lastSentX || y !== this.lastSentY) {
       this.lastSentX = x;

@@ -1,36 +1,34 @@
 import Phaser from "phaser";
 
-export class LocalPlayer {
-  public sprite: Phaser.GameObjects.Sprite;
-  public nameTag: Phaser.GameObjects.Text;
-  private scene: Phaser.Scene;
-  private body: Phaser.Physics.Arcade.Body;
-
+export class LocalPlayer extends Phaser.GameObjects.Container {
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    this.scene = scene;
-    this.sprite = scene.add.sprite(x, y, "player-tex");
-    scene.physics.add.existing(this.sprite);
-    this.body = this.sprite.body as Phaser.Physics.Arcade.Body;
-    this.body.setCollideWorldBounds(true);
-
-    this.nameTag = scene.add
-      .text(x, y, "You", {
-        fontFamily: "Arial", // Adding a cleaner font
+    const sprite = scene.add.sprite(0, 0, "player-tex");
+    const label = scene.add
+      .text(0, 0, "You", {
         fontSize: "12px",
         backgroundColor: "#00000066",
         padding: { x: 4, y: 2 },
       })
-      .setOrigin(0.5, 2.2);
+      .setOrigin(0.5, 1.5);
+
+    super(scene, x, y, [sprite, label]);
+    scene.add.existing(this);
+
+    // Add physics to the container
+    scene.physics.add.existing(this);
+
+    // Cast the built-in body instead of redefining it
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    body.setCollideWorldBounds(true);
   }
 
   update(cursors: any, wasd: any) {
-    const isTyping = document.activeElement?.tagName === "INPUT";
-    this.scene.input.keyboard!.enabled = !isTyping;
+    const isTyping = document.activeElement instanceof HTMLInputElement;
+
+    const body = this.body as Phaser.Physics.Arcade.Body;
 
     if (isTyping) {
-      this.body.setVelocity(0, 0);
-      // Even when typing, keep them synced
-      this.syncUI();
+      body.setVelocity(0, 0);
       return;
     }
 
@@ -48,20 +46,8 @@ export class LocalPlayer {
       vy *= Math.SQRT1_2;
     }
 
-    this.body.setVelocity(vx * speed, vy * speed);
+    body.setVelocity(vx * speed, vy * speed);
 
-    // ⭐ THE FIX: Call a helper to keep things locked together
-    this.syncUI();
-  }
-
-  private syncUI() {
-    const roundedX = Math.round(this.sprite.x);
-    const roundedY = Math.round(this.sprite.y);
-
-    this.nameTag.setPosition(roundedX, roundedY);
-
-    // Update depths for the Y-sorting effect
-    this.sprite.setDepth(roundedY);
-    this.nameTag.setDepth(roundedY + 1);
+    this.setDepth(this.y);
   }
 }
