@@ -1,30 +1,34 @@
 import Phaser from "phaser";
 
 export class LocalPlayer extends Phaser.GameObjects.Container {
-  constructor(scene: Phaser.Scene, x: number, y: number) {
+  constructor(
+    scene: Phaser.Scene,
+    x: number,
+    y: number,
+    name: string,
+    color: string,
+  ) {
     const sprite = scene.add.sprite(0, 0, "player-tex");
     const label = scene.add
-      .text(0, 0, "You", {
+      .text(0, 0, name, {
         fontSize: "12px",
         backgroundColor: "#00000066",
+        color: color, // Apply chosen color
+        fontStyle: "bold",
         padding: { x: 4, y: 2 },
       })
-      .setOrigin(0.5, 1.5);
+      .setOrigin(0.5, 2);
 
     super(scene, x, y, [sprite, label]);
     scene.add.existing(this);
 
-    // Add physics to the container
     scene.physics.add.existing(this);
-
-    // Cast the built-in body instead of redefining it
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setCollideWorldBounds(true);
   }
 
   update(cursors: any, wasd: any) {
     const isTyping = document.activeElement instanceof HTMLInputElement;
-
     const body = this.body as Phaser.Physics.Arcade.Body;
 
     if (isTyping) {
@@ -47,7 +51,6 @@ export class LocalPlayer extends Phaser.GameObjects.Container {
     }
 
     body.setVelocity(vx * speed, vy * speed);
-
     this.setDepth(this.y);
   }
 }

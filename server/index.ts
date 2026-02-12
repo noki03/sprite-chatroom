@@ -8,38 +8,47 @@ app.use(cors());
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: {
-    origin: "*", // Allows access from any device on your local network
-    methods: ["GET", "POST"],
-  },
+  cors: { origin: "*", methods: ["GET", "POST"] },
 });
 
-const players: Record<string, { x: number; y: number }> = {};
+interface PlayerData {
+  x: number;
+  y: number;
+  name: string;
+  color: string;
+  id: string;
+}
+
+const players: Record<string, PlayerData> = {};
 
 io.on("connection", (socket) => {
-  const shortId = socket.id.substring(0, 4);
-  console.log(`User Joined: ${socket.id}`);
+  socket.on("joinGame", (userData: { name: string; color: string }) => {
+    const newPlayer: PlayerData = {
+      x: Math.floor(Math.random() * 600) + 100,
+      y: Math.floor(Math.random() * 400) + 100,
+      name: userData.name || "Guest",
+      color: userData.color || "#ffffff",
+      id: socket.id,
+    };
 
-  // 1. Initialize player data
-  players[socket.id] = {
-    x: Math.floor(Math.random() * 600) + 100,
-    y: Math.floor(Math.random() * 400) + 100,
-  };
+    players[socket.id] = newPlayer;
 
-  // 2. Sync world state for the new player
-  socket.emit("currentPlayers", players);
+    // Sync the new player and notify others
+    socket.emit("currentPlayers", players);
+    socket.broadcast.emit("newPlayer", newPlayer);
 
-  // 3. Notify others of the new player (for the Phaser scene)
-  socket.broadcast.emit("newPlayer", { id: socket.id, ...players[socket.id] });
-
-  // 4. ⭐ SYSTEM MESSAGE: Announce join to the Chat Log
-  io.emit("newMessage", {
-    id: "SYSTEM",
-    text: `User ${shortId} has joined the room.`,
-    isSystem: true,
+    io.emit("newMessage", {
+      id: "SYSTEM",
+      text: `${newPlayer.name} has joined the room.`,
+      isSystem: true,
+    });
   });
 
-  // Handle Movement
+  // New listener: Allows Phaser to manually request the list if it missed the join broadcast
+  socket.on("requestPlayers", () => {
+    socket.emit("currentPlayers", players);
+  });
+
   socket.on("playerMove", (data: { x: number; y: number }) => {
     const player = players[socket.id];
     if (player) {
@@ -53,36 +62,31 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Handle Chat
   socket.on("chatMessage", (message: string) => {
-    console.log(`Chat from ${socket.id}: ${message}`);
-    // io.emit sends to EVERYONE, including the sender
-    io.emit("newMessage", {
-      id: socket.id,
-      text: message,
-      isSystem: false,
-    });
+    const player = players[socket.id];
+    if (player) {
+      io.emit("newMessage", {
+        id: socket.id,
+        name: player.name,
+        color: player.color,
+        text: message,
+        isSystem: false,
+      });
+    }
   });
 
-  // Handle Disconnect
   socket.on("disconnect", () => {
-    console.log(`User Left: ${socket.id}`);
-    delete players[socket.id];
-
-    // Notify Phaser to remove the sprite
-    io.emit("playerDisconnected", socket.id);
-
-    // ⭐ SYSTEM MESSAGE: Announce departure to the Chat Log
-    io.emit("newMessage", {
-      id: "SYSTEM",
-      text: `User ${shortId} has left the room.`,
-      isSystem: true,
-    });
+    const player = players[socket.id];
+    if (player) {
+      io.emit("newMessage", {
+        id: "SYSTEM",
+        text: `${player.name} has left.`,
+        isSystem: true,
+      });
+      delete players[socket.id];
+      io.emit("playerDisconnected", socket.id);
+    }
   });
 });
 
-const PORT = 3000;
-// Listening on 0.0.0.0 makes the server accessible via your Local IP
-httpServer.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Game Server reachable at http://172.20.20.116:${PORT}`);
-});
+httpServer.listen(3000, "0.0.0.0", () => console.log(`🚀 Server on port 3000`));

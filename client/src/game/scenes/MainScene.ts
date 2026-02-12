@@ -7,10 +7,8 @@ export class MainScene extends Phaser.Scene {
   private socket: Socket;
   private players: PlayerManager;
   private bubbles: ChatBubbleManager;
-
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd!: any;
-
   private lastSentX = 0;
   private lastSentY = 0;
 
@@ -23,38 +21,45 @@ export class MainScene extends Phaser.Scene {
 
   preload() {
     const graphics = this.make.graphics({ x: 0, y: 0 });
-
-    graphics.fillStyle(0x00ff00).fillRect(0, 0, 32, 32)
+    graphics
+      .fillStyle(0x00ff00)
+      .fillRect(0, 0, 32, 32)
       .generateTexture("player-tex", 32, 32);
-
-    graphics.clear().fillStyle(0xff0000).fillRect(0, 0, 32, 32)
+    graphics
+      .clear()
+      .fillStyle(0xff0000)
+      .fillRect(0, 0, 32, 32)
       .generateTexture("other-tex", 32, 32);
-
     graphics.destroy();
   }
 
   create() {
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.wasd = this.input.keyboard!.addKeys("W,A,S,D");
-
     this.input.keyboard!.removeCapture("SPACE,W,A,S,D");
-
-    this.players.spawnLocal(0, 0);
-
-    // --- Network Events ---
+    this.socket.emit("requestPlayers");
 
     this.socket.on("currentPlayers", (data) => {
       Object.keys(data).forEach((id) => {
+        const pData = data[id];
         if (id === this.socket.id) {
-          this.players.localPlayer.setPosition(data[id].x, data[id].y);
+          // Spawn Local with Name and Color
+          this.players.spawnLocal(pData.x, pData.y, pData.name, pData.color);
         } else {
-          this.players.spawnRemote(id, data[id].x, data[id].y);
+          // Spawn Remote with Name and Color
+          this.players.spawnRemote(
+            id,
+            pData.x,
+            pData.y,
+            pData.name,
+            pData.color,
+          );
         }
       });
     });
 
     this.socket.on("newPlayer", (data) =>
-      this.players.spawnRemote(data.id, data.x, data.y),
+      this.players.spawnRemote(data.id, data.x, data.y, data.name, data.color),
     );
 
     this.socket.on("playerMoved", (data) => {
@@ -80,19 +85,20 @@ export class MainScene extends Phaser.Scene {
   }
 
   update() {
-    const { localPlayer } = this.players;
+    // Only update if localPlayer exists (after joinGame)
+    if (this.players.localPlayer) {
+      this.players.localPlayer.update(this.cursors, this.wasd);
 
-    localPlayer.update(this.cursors, this.wasd);
+      const x = Math.round(this.players.localPlayer.x);
+      const y = Math.round(this.players.localPlayer.y);
+
+      if (x !== this.lastSentX || y !== this.lastSentY) {
+        this.lastSentX = x;
+        this.lastSentY = y;
+        this.socket.emit("playerMove", { x, y });
+      }
+    }
 
     this.bubbles.update((id) => this.players.getPlayer(id, this.socket.id!));
-
-    const x = Math.round(localPlayer.x);
-    const y = Math.round(localPlayer.y);
-
-    if (x !== this.lastSentX || y !== this.lastSentY) {
-      this.lastSentX = x;
-      this.lastSentY = y;
-      this.socket.emit("playerMove", { x, y });
-    }
   }
 }
