@@ -25,6 +25,7 @@ function App() {
     }
 
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Toggle Focus: If Enter is pressed and we aren't already in the input
       if (e.key === "Enter" && document.activeElement !== inputRef.current) {
         e.preventDefault();
         inputRef.current?.focus();
@@ -43,9 +44,15 @@ function App() {
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // 1. If there is a message, send it
     if (message.trim()) {
       socket.emit("chatMessage", message);
       setMessage("");
+      inputRef.current?.blur();
+    }
+    // 2. If the message is EMPTY, we still blur (close the focus)
+    else {
       inputRef.current?.blur();
     }
   };
@@ -61,18 +68,19 @@ function App() {
         </div>
       </div>
 
-      {/* Inside App.tsx return */}
       <div
         id="game-container"
+        // If the user clicks the game, it blurs the input
+        onMouseDown={() => {
+          if (document.activeElement === inputRef.current) {
+            inputRef.current?.blur();
+          }
+        }}
         className="relative border-4 border-neutral-700 rounded-xl shadow-2xl overflow-hidden bg-black w-200 h-150"
       >
-        {/* UI LAYER */}
         <div className="absolute inset-0 pointer-events-none flex flex-col justify-end items-start p-2">
-          {/* Combined Chat Widget */}
           <div className="flex flex-col shadow-2xl">
             <ChatLog messages={chatLog} />
-
-            {/* The Input box now has a flat top border if the log is open, or rounded if closed */}
             <div className="pointer-events-auto w-80 bg-black/80 border border-white/10 p-2 rounded-b-lg">
               <ChatInput
                 ref={inputRef}
